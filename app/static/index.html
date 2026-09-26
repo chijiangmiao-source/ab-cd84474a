@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>轨道编队控制台</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922;
+    --bad: #f85149; --chip: #21262d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+  header { padding: 14px 22px; border-bottom: 1px solid var(--border);
+           display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { display: grid; gap: 14px; padding: 16px 22px;
+         grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  section { background: var(--panel); border: 1px solid var(--border);
+            border-radius: 8px; padding: 14px 16px; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: var(--accent); }
+  label { display: block; color: var(--muted); font-size: 12px; margin: 8px 0 3px; }
+  input, select, button { font: inherit; border-radius: 6px; border: 1px solid var(--border);
+         background: #0d1117; color: var(--text); padding: 6px 10px; }
+  input, select { width: 100%; }
+  button { cursor: pointer; background: #21262d; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  button.ghost { padding: 2px 8px; font-size: 12px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 110px; }
+  .msg { margin-top: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px;
+         display: none; white-space: pre-wrap; word-break: break-all; }
+  .msg.ok { display: block; background: rgba(63,185,80,.12); border: 1px solid var(--ok); }
+  .msg.bad { display: block; background: rgba(248,81,73,.12); border: 1px solid var(--bad); }
+  .msg.warn { display: block; background: rgba(210,153,34,.12); border: 1px solid var(--warn); }
+  .term-card { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+  .term-num { font-size: 34px; font-weight: 700; color: var(--accent); }
+  .kv { color: var(--muted); font-size: 12px; }
+  .kv b { color: var(--text); font-size: 14px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .chip { background: var(--chip); border: 1px solid var(--border); border-radius: 12px;
+          padding: 1px 10px; font-size: 12px; }
+  .chip.ok { border-color: var(--ok); color: var(--ok); }
+  .badge { font-size: 12px; border-radius: 10px; padding: 1px 9px; }
+  .badge.on { background: rgba(63,185,80,.15); color: var(--ok); }
+  .badge.off { background: rgba(248,81,73,.15); color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+           vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .log-entry { font-family: ui-monospace, monospace; font-size: 12px; }
+  .log-entry .idx { color: var(--muted); }
+  ul.seq { margin: 0; padding-left: 0; list-style: none; }
+  ul.seq li { padding: 4px 0; border-bottom: 1px dashed var(--border);
+              font-family: ui-monospace, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .wide { grid-column: 1 / -1; }
+  .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>轨道编队控制台</h1>
+  <span class="sub">主控切换 · 任期申请 · 多数确认 · 指令提交</span>
+  <div class="toolbar">
+    <label class="switch" style="margin:0">
+      <input type="checkbox" id="autoRefresh" checked style="width:auto"> 自动刷新
+    </label>
+    <button class="ghost" onclick="refresh()">刷新</button>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>① 创建编队</h2>
+    <div class="row">
+      <div>
+        <label>节点数量（3-5）</label>
+        <select id="nodeCount">
+          <option>3</option><option>4</option><option>5</option>
+        </select>
+      </div>
+      <div><button class="primary" onclick="createFormation()">创建编队</button></div>
+    </div>
+    <div class="msg" id="formationMsg"></div>
+  </section>
+
+  <section>
+    <h2>② 申请任期</h2>
+    <div class="row">
+      <div>
+        <label>控制器标识</label>
+        <input id="termController" placeholder="如 ctrl-A" value="ctrl-A">
+      </div>
+      <div><button class="primary" onclick="requestTerm()">申请任期</button></div>
+    </div>
+    <div class="msg" id="termMsg"></div>
+  </section>
+
+  <section>
+    <h2>③ 提交指令</h2>
+    <div class="row">
+      <div>
+        <label>控制器标识</label>
+        <input id="cmdController" value="ctrl-A">
+      </div>
+      <div>
+        <label>任期</label>
+        <input id="cmdTerm" type="number" min="1" placeholder="申请后自动填入">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>稳定请求标识</label>
+        <input id="cmdRequestId" placeholder="如 req-0001">
+      </div>
+      <div style="flex:0"><button class="ghost" onclick="genRequestId()">生成</button></div>
+    </div>
+    <label>指令内容</label>
+    <input id="cmdCommand" placeholder="如 ORBIT-RAISE +2.4km">
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label class="switch"><input type="checkbox" id="cmdCrash" style="width:auto">
+          多数确认后模拟退出（演示崩溃恢复）</label>
+      </div>
+      <div style="flex:0"><button class="primary" onclick="submitCommand()">提交指令</button></div>
+    </div>
+    <div class="msg" id="cmdMsg"></div>
+  </section>
+
+  <section>
+    <h2>现役任期</h2>
+    <div id="activeTerm"><span class="muted">尚无现役任期</span></div>
+  </section>
+
+  <section>
+    <h2>已提交序列（多数确认）</h2>
+    <ul class="seq" id="committedSeq"><li class="muted">暂无已提交指令</li></ul>
+  </section>
+
+  <section class="wide">
+    <h2>节点状态 · 各节点已接受的指令序列</h2>
+    <table>
+      <thead><tr>
+        <th>节点</th><th>可达</th><th>当前任期</th><th>投票给</th><th>已提交</th><th>已接受指令序列</th>
+      </tr></thead>
+      <tbody id="nodeRows"><tr><td colspan="6" class="muted">尚未创建编队</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+let lastState = null;
+
+async function api(path, method, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const resp = await fetch(path, opts);
+  const data = await resp.json().catch(() => ({}));
+  return { status: resp.status, data };
+}
+
+function show(id, kind, text) {
+  const el = document.getElementById(id);
+  el.className = "msg " + kind;
+  el.textContent = text;
+}
+
+async function createFormation() {
+  const nodeCount = parseInt(document.getElementById("nodeCount").value, 10);
+  const r = await api("/api/formations", "POST", { nodeCount });
+  if (r.status === 200) show("formationMsg", "ok", "已创建 " + nodeCount + " 节点编队");
+  else show("formationMsg", "bad", r.data.message || "创建失败");
+  refresh();
+}
+
+async function toggleNode(id, reachable) {
+  await api("/api/nodes/" + encodeURIComponent(id) + "/reachability", "POST", { reachable });
+  refresh();
+}
+
+async function requestTerm() {
+  const controllerId = document.getElementById("termController").value.trim();
+  const r = await api("/api/term/request", "POST", { controllerId });
+  if (r.status === 200) {
+    show("termMsg", "ok", "任期 " + r.data.term + " 授予 " + controllerId +
+      "，法定确认节点: " + r.data.quorum.join(", "));
+    document.getElementById("cmdController").value = controllerId;
+    document.getElementById("cmdTerm").value = r.data.term;
+  } else {
+    show("termMsg", r.data.error === "no_majority" ? "warn" : "bad",
+      "申请失败 [" + r.data.error + "] " + (r.data.message || ""));
+  }
+  refresh();
+}
+
+function genRequestId() {
+  document.getElementById("cmdRequestId").value =
+    "req-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e4).toString(36);
+}
+
+async function submitCommand() {
+  const body = {
+    controllerId: document.getElementById("cmdController").value.trim(),
+    term: parseInt(document.getElementById("cmdTerm").value, 10),
+    requestId: document.getElementById("cmdRequestId").value.trim(),
+    command: document.getElementById("cmdCommand").value.trim(),
+    crashAfterMajority: document.getElementById("cmdCrash").checked,
+  };
+  let r;
+  try {
+    r = await api("/api/commands", "POST", body);
+  } catch (e) {
+    show("cmdMsg", "warn", "连接中断：服务可能已按“多数确认后退出”模拟崩溃，" +
+      "待其重启后刷新即可看到已提交结果（" + e.message + "）");
+    setTimeout(refresh, 1500);
+    return;
+  }
+  if (r.status === 200) {
+    show("cmdMsg", "ok", (r.data.deduplicated ? "重传去重，返回原结论：" : "已提交：") +
+      "#" + r.data.index + " " + body.command + "（确认节点: " + r.data.quorum.join(", ") + "）");
+  } else {
+    const kind = (r.data.error === "conflict" || r.data.error === "no_quorum") ? "warn" : "bad";
+    show("cmdMsg", kind, "拒绝 [" + r.data.error + "] " + (r.data.message || ""));
+  }
+  refresh();
+}
+
+function fmtLog(entries, committedCount) {
+  if (!entries.length) return '<span class="muted">（空）</span>';
+  return entries.map(e =>
+    '<div class="log-entry"><span class="idx">#' + e.index + " T" + e.term + "</span> " +
+    escapeHtml(e.command) + ' <span class="idx">(' + escapeHtml(e.requestId) + ")</span>" +
+    (e.index <= committedCount ? ' <span class="badge on">已提交</span>' : "") +
+    "</div>").join("");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function render(state) {
+  lastState = state;
+  if (!state.initialized) {
+    document.getElementById("activeTerm").innerHTML =
+      '<span class="muted">尚未创建编队</span>';
+    return;
+  }
+  // 现役任期
+  const at = state.activeTerm;
+  const termEl = document.getElementById("activeTerm");
+  if (at) {
+    const lease = at.leaseActive
+      ? '<span class="badge on">租约有效 ' + (at.leaseRemainingMs / 1000).toFixed(1) + "s</span>"
+      : '<span class="badge off">租约已失效</span>';
+    termEl.innerHTML =
+      '<div class="term-card"><div class="term-num">T' + at.term + "</div>" +
+      '<div><div class="kv">持有者 <b>' + escapeHtml(at.controller) + "</b></div>" +
+      '<div class="kv">法定确认节点</div><div class="chips">' +
+      at.quorum.map(q => '<span class="chip ok">' + escapeHtml(q) + "</span>").join("") +
+      "</div></div><div>" + lease + "</div></div>";
+  } else {
+    termEl.innerHTML = '<span class="muted">尚无现役任期</span>';
+  }
+  // 已提交序列
+  const seq = document.getElementById("committedSeq");
+  seq.innerHTML = state.committed.length
+    ? state.committed.map(e =>
+        "<li>#" + e.index + " [T" + e.term + "] " + escapeHtml(e.command) +
+        ' <span class="muted">(' + escapeHtml(e.requestId) + " · 确认: " +
+        (e.quorum || []).join(",") + ")</span></li>").join("")
+    : '<li class="muted">暂无已提交指令</li>';
+  // 节点表
+  document.getElementById("nodeRows").innerHTML = state.nodes.map(n =>
+    "<tr><td><b>" + escapeHtml(n.id) + "</b></td>" +
+    '<td><label class="switch"><input type="checkbox" style="width:auto" ' +
+    (n.reachable ? "checked " : "") +
+    'onchange="toggleNode(\'' + escapeHtml(n.id) + "\', this.checked)\">" +
+    (n.reachable ? "可达" : "不可达") + "</label></td>" +
+    "<td>T" + n.currentTerm + "</td>" +
+    "<td>" + (n.votedFor ? escapeHtml(n.votedFor) : '<span class="muted">-</span>') + "</td>" +
+    "<td>" + n.committedCount + " / " + state.committed.length + "</td>" +
+    "<td>" + fmtLog(n.log, n.committedCount) + "</td></tr>").join("");
+}
+
+async function refresh() {
+  try {
+    const r = await api("/api/state", "GET");
+    if (r.status === 200) render(r.data);
+  } catch (e) { /* 服务重启中，下个周期重试 */ }
+}
+
+setInterval(() => {
+  if (document.getElementById("autoRefresh").checked) refresh();
+}, 1000);
+refresh();
+genRequestId();
+</script>
+</body>
+</html>

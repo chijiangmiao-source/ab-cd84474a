@@ -1,0 +1,42 @@
+name: orbit-formation
+
+services:
+  app:
+    build: .
+    image: orbit-formation-app
+    environment:
+      PORT: "8080"
+      DATA_DIR: /data
+      LEASE_MS: "1500"
+    volumes:
+      - app-data:/data
+    ports:
+      # 可配置宿主机端口：HOST_PORT=9090 docker compose up -d
+      - "${HOST_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health',timeout=2).status==200 else 1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+
+  verify:
+    image: orbit-formation-app
+    build: .
+    depends_on:
+      app:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      APP_URL: "http://app:8080"
+      HOST_HEALTH_URL: "http://host.docker.internal:${HOST_PORT:-8080}/health"
+      SMOKE_CRASH_TEST: "1"
+    # 代码测试（多数确认后崩溃/旧主控迟到/重传冲突）+ HTTP 冒烟，随后以退出码报告
+    command: ["sh", "-c",
+              "python -m unittest discover -s tests -v && python tests/smoke.py"]
+
+volumes:
+  app-data:

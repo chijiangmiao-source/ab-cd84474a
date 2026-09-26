@@ -1,0 +1,10 @@
+data/
+__pycache__/
+*.pyc
+.git/
+.pytest_cache/
+scripts/
+README.md
+Makefile
+docker-compose.yml
+.dockerignore
